@@ -6,3 +6,4 @@ Team members:
   Allen
   Steve
   Ethan
+  Nitin
