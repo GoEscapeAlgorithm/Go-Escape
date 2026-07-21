@@ -26,6 +26,7 @@ platforms = []
 spikes = []
 conveyors = []
 goal = []
+arcs = []
 
 # Ball initialization
 ball_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
@@ -40,18 +41,20 @@ bottom_shape = pymunk.Segment(border_body, (-SCREEN_DIMENSIONS[0], -60), (SCREEN
 bottom_shape.collision_type = SPIKE_TYPE
 space.add(bottom_shape)
 
-# Level Creation
-platforms.append(fcs.add_platform(space, 150, 500, 0.25))
-platforms.append(fcs.add_platform(space, 0, 300, -0.5))
-spikes.extend(fcs.add_platform_spike(space, platforms[0][1], higher=True, num_spikes=2))
-spikes.append(fcs.add_platform_spike(space, platforms[1][1]))
-conveyors.append(fcs.add_conveyor(space, 200, 150, 100, 150))
+# Level Creation - use extend instead of append
+platforms.extend(fcs.add_platform(space, 150, 500, 0.25))
+platforms.extend(fcs.add_platform(space, 0, 300, -0.5))
+spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
+spikes.extend(fcs.add_platform_spike(space, platforms[1][1]))
+conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], num_spikes=2))
-goal.append(fcs.add_goal(space, 50, 50))
+arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236))
+goal.extend(fcs.add_goal(space, 50, 50))
 
 all_objects.extend(platforms)
 all_objects.extend(spikes)
 all_objects.extend(conveyors)
+all_objects.extend(arcs)
 all_objects.extend(goal)
 
 # Collision handlers
@@ -75,21 +78,17 @@ def reset_world(space: pymunk.Space):
             spike[0].velocity = (0, 0)
     for platform in platforms:
         platform[2] = False
-    print(can_jump)
 
 def end_fail(arbiter, space, data):
     reset_world(space)
-    print('end_fail')
 def end_win(arbiter, space, data):
     reset_world(space)
-    print('end_win')
 
 def begin_platform(arbiter, space, data):
     global can_jump
     can_jump = True
     _, platform_shape = arbiter.shapes
     mark_visited(platforms, platform_shape)
-    print('flip_jump_state')
 def separate_platform(arbiter, space, data):
     global can_jump
     can_jump = False
@@ -155,6 +154,12 @@ while running:
     for spike in spikes:
         pygame.draw.polygon(screen, pygame.Color('black'), [(v.x, fcs.flipy(v.y)) for v in [spike[0].local_to_world(v) for v in spike[1].get_vertices()]])
 
+    for arc in arcs:
+        for segment in arc[1]:
+            start = arc[0].local_to_world(segment.a)
+            end = arc[0].local_to_world(segment.b)
+            pygame.draw.line(screen, pygame.Color('black'), (start.x, fcs.flipy(start.y)), (end.x, fcs.flipy(end.y)), width=int(segment.radius*2))
+
     for segment in goal[0][1]:
         start = goal[0][0].local_to_world(segment.a)
         end = goal[0][0].local_to_world(segment.b)
@@ -174,3 +179,4 @@ while running:
     clock.tick(60)
 
 pygame.quit()
+print(all_objects)
