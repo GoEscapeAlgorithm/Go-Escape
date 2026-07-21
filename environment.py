@@ -1,3 +1,5 @@
+import math
+
 import pygame
 import pymunk
 import env_functions as fcs
@@ -9,6 +11,7 @@ STATIC_TERRAIN_TYPE = 1
 SPIKE_TYPE = 2
 GOAL_TYPE = 3
 CONVEYOR_TYPE = 4
+CONST_SPINNING_TYPE = 5
 
 
 pygame.init()
@@ -37,9 +40,21 @@ spikes.append(fcs.add_platform_spike(space, platforms[1][1]))
 conveyors.append(fcs.add_conveyor(space, 200, 150, 100, 100))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], num_spikes=2))
 
+
 all_objects.extend(platforms)
 all_objects.extend(spikes)
 all_objects.extend(conveyors)
+
+# Create arc once (do not recreate every frame)
+arc_body, arc_segments = fcs.create_arc(
+    space = space,
+    center = (150, 300),
+    radius = 100,
+    start_angle = math.pi,
+    end_angle = math.pi * 2,
+    segments = 15,
+    thickness=ball_shape.radius
+)
 
 def reset_world(space: pymunk.Space):
     ball_body.position = (150, 600)
@@ -53,6 +68,7 @@ def reset_world(space: pymunk.Space):
 
 def end_fail(arbiter, space, data):
     reset_world(space)
+
 def end_win(arbiter, space, data):
     reset_world(space)
 
@@ -82,6 +98,7 @@ def check_conveyor_state(arbiter, space, data):
             spike[0].velocity = (0, 0)
 
 space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=flip_jump_state, separate=flip_jump_state)
+space.on_collision(BALL_TYPE, CONST_SPINNING_TYPE, begin=flip_jump_state, separate=flip_jump_state) # placeholder
 space.on_collision(BALL_TYPE, SPIKE_TYPE, begin=end_fail)
 space.on_collision(BALL_TYPE, CONVEYOR_TYPE, begin=move_conveyor, pre_solve=check_conveyor_state, separate=flip_jump_state)
 
