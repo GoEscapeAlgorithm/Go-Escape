@@ -1,4 +1,5 @@
 import pymunk
+import math
 SCREEN_DIMENSIONS = (300, 600)
 # Collision types:
 # BALL_TYPE = 0
@@ -6,6 +7,7 @@ SCREEN_DIMENSIONS = (300, 600)
 # SPIKE_TYPE = 2
 # GOAL_TYPE = 3
 # CONVEYOR_TYPE = 4
+# CONST_SPINNING_TYPE = 5
 
 def flipy(y):
     return -y + SCREEN_DIMENSIONS[1]
@@ -109,3 +111,28 @@ def add_conveyor_spike(space: pymunk.Space, conveyor_shape: pymunk.Shape, size =
         return conveyor_shape.body.spikes[0]
     else:
         return conveyor_shape.body.spikes
+
+def create_arc(space, center, radius, start_angle, end_angle, segments=10, thickness=10.0):
+
+    arc_body = pymunk.Body(body_type=pymunk.Body.STATIC)
+    arc_body.position = center
+    space.add(arc_body)
+
+    angle_step = (end_angle - start_angle) / segments
+
+    created_segments = []
+    for rah in range(segments):
+        angle1 = start_angle + (rah * angle_step)
+        angle2 = start_angle + ((rah + 1) * angle_step)
+
+        v1 = pymunk.Vec2d(radius * math.cos(angle1), radius * math.sin(angle1))
+        v2 = pymunk.Vec2d(radius * math.cos(angle2), radius * math.sin(angle2))
+
+        segment = pymunk.Segment(arc_body, v1, v2, thickness)
+        segment.friction = 0.5
+        segment.elasticity = 1
+        segment.collision_type = 1 # placeholder
+        space.add(segment)
+        created_segments.append(segment)
+
+    return arc_body, created_segments
