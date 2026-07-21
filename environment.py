@@ -2,6 +2,7 @@ import pygame
 import pymunk
 
 SCREEN_DIMENSIONS = (300, 600)
+GRAVITY = 450
 
 def flipy(y):
     return -y + SCREEN_DIMENSIONS[1]
@@ -75,7 +76,7 @@ platforms = []
 spikes = []
 
 space = pymunk.Space()
-space.gravity = 0.0, -900.0
+space.gravity = 0.0, -GRAVITY
 BALL_TYPE = 0
 STATIC_TERRAIN_TYPE = 1
 SPIKE_TYPE = 2
@@ -109,7 +110,7 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif can_jump and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            ball_body.velocity = (ball_body.velocity.x, 350)
+            ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
     
     screen.fill('white')
 
