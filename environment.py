@@ -51,11 +51,11 @@ spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
 spikes.extend(fcs.add_platform_spike(space, platforms[1][1]))
 conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
-arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=1, from_start=True, outside=False, offset=25))
+#arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236))
+#spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
+#spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=1, from_start=True, outside=False, offset=25))
 goal.extend(fcs.add_goal(space, 50, 50))
-hinges.extend(fcs.add_hinge(space, 0, 400, 100, -0.7854))
+hinges.extend(fcs.add_hinge(space, 150, 250, 100, -0.7854, centered=True, left=False, clockwise=False))
 spikes.extend(fcs.add_hinge_spike(space, hinges[0][1], num_spikes=2))
 
 # Ball initialization
@@ -247,7 +247,10 @@ while running:
     
     for hinge in hinges:
         pygame.draw.polygon(screen, pygame.Color('black'), [(v.x, fcs.flipy(v.y)) for v in [hinge[0].local_to_world(v) for v in hinge[1].get_vertices()]])
-        pygame.draw.circle(screen, pygame.Color('black'), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y))), hinge[0].width/2)
+        if hinge[0].centered:
+            pygame.draw.circle(screen, pygame.Color('black'), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y) + hinge[0].width/2)), hinge[0].width/2)
+        else:
+            pygame.draw.circle(screen, pygame.Color('black'), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y))), hinge[0].width/2)
 
     for arc in arcs:
         for segment in arc[1]:
@@ -274,7 +277,7 @@ while running:
     # Reset when ball leaves screen
     # Theoretically should never run due to the border, but just in case something weird happens, still might be useful. 
     if ball_body.position[1] < -50:
-        reset_world(space)
+        reset_world(space, key=ball_body, data={})
     pygame.display.flip()
 
     clock.tick(60)

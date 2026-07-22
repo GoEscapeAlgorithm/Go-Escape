@@ -193,21 +193,24 @@ def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 13, num_spi
         offset = offset + (a * size / arc_body.radius if from_start else a * -size / arc_body.radius)
     return arc_body.spikes
 
-def add_hinge(space: pymunk.Space, x: int, y: int, length: int, target: float, width = 10, angle = 0.0, speed = 1.5, left = True, clockwise = True):
+def add_hinge(space: pymunk.Space, x: int, y: int, length: int, target: float, width = 10, angle = 0.0, speed = 1.5, left = True, clockwise = True, centered = False):
     hinge_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
-    hinge_body.position = pymunk.Vec2d(x, y) #+ pymunk.Vec2d((length/2 if left else -length/2), 0).rotated(angle)
-    hinge_body.angle = angle
+    hinge_body.position = pymunk.Vec2d(x, y)
+    hinge_body.angle = angle if left else 3.14159 - angle
     hinge_body.pivot_position = pymunk.Vec2d(x, y)
     hinge_body.width = width
     hinge_body.length = length
     hinge_body.target = target
-    hinge_body.origin = angle
+    hinge_body.origin = hinge_body.angle
     hinge_body.speed = speed
-    hinge_body.moving = False
+    hinge_body.centered = centered
     hinge_body.left = left
     hinge_body.spikes = []
     hinge_body.direction = -1 if clockwise else 1
-    hinge_shape = pymunk.Poly(hinge_body, [pymunk.Vec2d.from_polar(width/2, 1.5708), 
+    if centered:
+        hinge_shape = pymunk.Poly.create_box(hinge_body, (length, width))
+    else:
+        hinge_shape = pymunk.Poly(hinge_body, [pymunk.Vec2d.from_polar(width/2, 1.5708), 
                                            pymunk.Vec2d.from_polar(width/2, -1.5708), 
                                            pymunk.Vec2d.from_polar(width/2, -1.5708) + pymunk.Vec2d(length, 0), 
                                            pymunk.Vec2d.from_polar(width/2, 1.5708) + pymunk.Vec2d(length, 0)])
@@ -223,8 +226,8 @@ def add_hinge_spike(space: pymunk.Space, hinge_shape: pymunk.Shape, size = 10, n
     for i in range(num_spikes):
         spike_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
         spike_body.position = hinge_shape.body.position
-        spike_body.geo_center = pymunk.Vec2d((hinge_shape.body.length if hinge_shape.body.left else -hinge_shape.body.length), hinge_shape.body.width/2) + pymunk.Vec2d.from_polar(size, (hinge_shape.body.angle + 0.5236 if not hinge_shape.body.left else hinge_shape.body.angle + 2.6180)) + pymunk.Vec2d.from_polar(offset, -hinge_shape.body.angle)
-        spike_body.angle = hinge_shape.body.angle
+        spike_body.geo_center = pymunk.Vec2d(hinge_shape.body.length / (2 if hinge_shape.body.centered else 1), hinge_shape.body.width/2) + pymunk.Vec2d.from_polar(size, (0.5236 if not hinge_shape.body.left else 2.6180)) + pymunk.Vec2d.from_polar(offset, 0) + (pymunk.Vec2d(-hinge_shape.body.length * (1 if hinge_shape.body.centered else 2), 0) if not hinge_shape.body.left else pymunk.Vec2d(0, 0))
+        spike_body.angle = (hinge_shape.body.angle if hinge_shape.body.left else 3.14159 - hinge_shape.body.angle)
         spike_body.origin = [spike_body.position, spike_body.angle]
         spike_shape = pymunk.Poly(spike_body, [base_coord_1 + spike_body.geo_center, base_coord_2 + spike_body.geo_center, peak_coord + spike_body.geo_center])
         spike_shape.collision_type = 2 # Spike collision 
