@@ -8,6 +8,14 @@ SCREEN_DIMENSIONS = (300, 600)
 # GOAL_TYPE = 3
 # CONVEYOR_TYPE = 4
 # ARC_TYPE = 5
+# HINGE_TYPE = 6
+
+def find_lowest_angle(angle1: float, angle2: float):
+    vec_1 = pymunk.Vec2d.from_polar(1, angle1)
+    vec_2 = pymunk.Vec2d.from_polar(1, angle2)
+    vec_t = pymunk.Vec2d.from_polar(1, -1.5708)
+
+    return vec_1.dot(vec_t) > vec_2.dot(vec_t)
 
 def flipy(y):
     return -y + SCREEN_DIMENSIONS[1]
@@ -130,7 +138,7 @@ def add_goal(space: pymunk.Space, x: int, y: int, width = 100, line_thickness = 
     space.add(goal_body, goal_base_shape, goal_left_wall_shape, goal_right_wall_shape)
     return [[goal_body, [goal_base_shape, goal_left_wall_shape, goal_right_wall_shape]]]
 
-def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float, end_angle: float, speed = 1.25, segments=100, thickness=8):
+def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float, end_angle: float, speed = 1.5, segments=100, thickness=8):
     start_angle = 6.2832 + start_angle if start_angle < 0 else start_angle
     end_angle = 6.2832 + end_angle if end_angle < 0 else end_angle
 
@@ -184,3 +192,62 @@ def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 13, num_spi
         a = 0.8 if outside else 0.9
         offset = offset + (a * size / arc_body.radius if from_start else a * -size / arc_body.radius)
     return arc_body.spikes
+
+def add_hinge(space: pymunk.Space, x: int, y: int, length: int, target: float, width = 10, angle = 0.0, speed = 1.5, left = True, clockwise = True):
+    hinge_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+    hinge_body.position = pymunk.Vec2d(x, y) #+ pymunk.Vec2d((length/2 if left else -length/2), 0).rotated(angle)
+    hinge_body.angle = angle
+    hinge_body.pivot_position = pymunk.Vec2d(x, y)
+    hinge_body.width = width
+    hinge_body.length = length
+    hinge_body.target = target
+    hinge_body.origin = angle
+    hinge_body.speed = speed
+    hinge_body.moving = False
+    hinge_body.left = left
+    hinge_body.spikes = []
+    hinge_body.direction = -1 if clockwise else 1
+    hinge_shape = pymunk.Poly(hinge_body, [pymunk.Vec2d.from_polar(width/2, 1.5708), 
+                                           pymunk.Vec2d.from_polar(width/2, -1.5708), 
+                                           pymunk.Vec2d.from_polar(width/2, -1.5708) + pymunk.Vec2d(length, 0), 
+                                           pymunk.Vec2d.from_polar(width/2, 1.5708) + pymunk.Vec2d(length, 0)])
+    hinge_shape.collision_type = 6 # Hinge collision
+    space.add(hinge_body, hinge_shape)
+    return [[hinge_body, hinge_shape, False]]
+
+def add_hinge_spike(space: pymunk.Space, hinge_shape: pymunk.Shape, size = 10, num_spikes = 1, offset = 0):
+    base_coord_1 = pymunk.Vec2d.from_polar(size, -2.6180)
+    base_coord_2 = pymunk.Vec2d.from_polar(size, -0.5236)
+    peak_coord = pymunk.Vec2d.from_polar(size, 1.5708)
+
+    for i in range(num_spikes):
+        spike_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+        spike_body.position = hinge_shape.body.position
+        spike_body.geo_center = pymunk.Vec2d((hinge_shape.body.length if hinge_shape.body.left else -hinge_shape.body.length), hinge_shape.body.width/2) + pymunk.Vec2d.from_polar(size, (hinge_shape.body.angle + 0.5236 if not hinge_shape.body.left else hinge_shape.body.angle + 2.6180)) + pymunk.Vec2d.from_polar(offset, -hinge_shape.body.angle)
+        spike_body.angle = hinge_shape.body.angle
+        spike_body.origin = [spike_body.position, spike_body.angle]
+        spike_shape = pymunk.Poly(spike_body, [base_coord_1 + spike_body.geo_center, base_coord_2 + spike_body.geo_center, peak_coord + spike_body.geo_center])
+        spike_shape.collision_type = 2 # Spike collision 
+        space.add(spike_body, spike_shape)
+        hinge_shape.body.spikes.append([spike_body, spike_shape])
+
+        offset -= (1.5 * size if hinge_shape.body.left else -1.5 * size)
+    return hinge_shape.body.spikes
+
+def add_start(space: pymunk.Space, x: int):
+    left_gate_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
+    right_gate_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
+    left_gate_body.position = (x - 7, 575)
+    right_gate_body.position = (x + 7, 575)
+    left_gate_body.pivot_position = pymunk.Vec2d(x - 14, 575)
+    right_gate_body.pivot_position = pymunk.Vec2d(x + 14, 575)
+    left_gate_body.data = [left_gate_body.position, left_gate_body.angle]
+    right_gate_body.data = [right_gate_body.position, right_gate_body.angle]
+    left_gate_body.width = 10
+    right_gate_body.width = 10
+    left_gate_shape = pymunk.Poly.create_box(left_gate_body, (14, 5))
+    right_gate_shape = pymunk.Poly.create_box(right_gate_body, (14, 5))
+    left_gate_joint = pymunk.PivotJoint(space.static_body, left_gate_body, left_gate_body.pivot_position)
+    right_gate_joint = pymunk.PivotJoint(space.static_body, right_gate_body, right_gate_body.pivot_position)
+    space.add(left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint)
+    return [left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint]
