@@ -1,4 +1,5 @@
 import pymunk
+import pymunk.autogeometry
 SCREEN_DIMENSIONS = (300, 600)
 # Collision types:
 # BALL_TYPE = 0
@@ -6,6 +7,7 @@ SCREEN_DIMENSIONS = (300, 600)
 # SPIKE_TYPE = 2
 # GOAL_TYPE = 3
 # CONVEYOR_TYPE = 4
+# ARC_TYPE = 5
 
 def flipy(y):
     return -y + SCREEN_DIMENSIONS[1]
@@ -128,27 +130,32 @@ def add_goal(space: pymunk.Space, x: int, y: int, width = 100, line_thickness = 
     space.add(goal_body, goal_base_shape, goal_left_wall_shape, goal_right_wall_shape)
     return [[goal_body, [goal_base_shape, goal_left_wall_shape, goal_right_wall_shape]]]
 
-def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float, end_angle: float, segments=10, thickness=10.0):
+def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float, end_angle: float, speed: float, segments=10, thickness=8):
+    start_angle = 6.2832 + start_angle if start_angle < 0 else start_angle
+    end_angle = 6.2832 + end_angle if end_angle < 0 else end_angle
 
     arc_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
     arc_body.position = (x, y)
+    arc_body.angular_velocity = speed
+    arc_body.radius = radius
     space.add(arc_body)
 
     angle_step = abs(end_angle - start_angle) / segments
 
-    created_segments = []
-
+    shapes = []
     for rah in range(segments):
         angle1 = start_angle + (rah * angle_step)
-        angle2 = start_angle + ((rah + 1) * angle_step)
-
-        v1 = pymunk.Vec2d.from_polar(radius, angle1)
-        v2 = pymunk.Vec2d.from_polar(radius, angle2)
-
-        segment = pymunk.Segment(arc_body, v1, v2, thickness/2)
-        segment.collision_type = 1 # Static terrain collision
-        space.add(segment)
-        created_segments.append(segment)
-
-    return [[arc_body, created_segments]]
+        angle2 = start_angle + (rah+1) * angle_step
+        vertices = []
+        vertices.append(pymunk.Vec2d.from_polar(radius-thickness/2, angle1))
+        vertices.append(pymunk.Vec2d.from_polar(radius+thickness/2, angle1))
+        vertices.append(pymunk.Vec2d.from_polar(radius-thickness/2, angle2))
+        vertices.append(pymunk.Vec2d.from_polar(radius+thickness/2, angle2))
+        piece_shape = pymunk.Poly(arc_body, vertices)
+        piece_shape.friction = 0
+        piece_shape.collision_type = 5 # Arc collision
+        space.add(piece_shape)
+        shapes.append(piece_shape)
+    
+    return [[arc_body, shapes, False]]
 

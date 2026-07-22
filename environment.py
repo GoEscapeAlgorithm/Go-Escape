@@ -10,6 +10,8 @@ STATIC_TERRAIN_TYPE = 1
 SPIKE_TYPE = 2
 GOAL_TYPE = 3
 CONVEYOR_TYPE = 4
+ARC_TYPE = 5
+
 
 # Pygame and pymunk initialization
 pygame.init()
@@ -18,6 +20,8 @@ clock = pygame.time.Clock()
 running = True
 space = pymunk.Space()
 space.gravity = 0.0, -GRAVITY
+space.iterations = 20
+space.idle_speed_threshold = 0.2
 
 # Level and state storage
 can_jump = False
@@ -31,6 +35,8 @@ arcs = []
 # Ball initialization
 ball_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
 ball_body.position = (150, 600)
+ball_body.radius = 10
+ball_body.data = ball_body.mass, ball_body.moment
 ball_shape = pymunk.Circle(ball_body, 10)
 ball_shape.collision_type = BALL_TYPE
 space.add(ball_body, ball_shape)
@@ -48,7 +54,7 @@ spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
 spikes.extend(fcs.add_platform_spike(space, platforms[1][1]))
 conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], num_spikes=2))
-arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236))
+arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236, 0.75, segments=100))
 goal.extend(fcs.add_goal(space, 50, 50))
 
 all_objects.extend(platforms)
@@ -64,6 +70,17 @@ def mark_visited(objects, shape: pymunk.Shape):
             object[2] = True
             break
 
+def freeze_ball(space, key, data):
+            ball_body.body_type = pymunk.Body.STATIC
+            ball_body.velocity = (0, 0)
+            ball_body.angular_velocity = 0
+            ball_body.force = (0, 0)
+            ball_body.torque = 0
+def unfreeze_ball(space, key, data):
+        ball_body.body_type = pymunk.Body.DYNAMIC
+        ball_body.mass = ball_body.data[0]
+        ball_body.moment = ball_body.data[1]
+
 def reset_world(space: pymunk.Space):
     ball_body.position = (150, 600)
     ball_body.velocity = (0, 0)
@@ -78,6 +95,9 @@ def reset_world(space: pymunk.Space):
             spike[0].velocity = (0, 0)
     for platform in platforms:
         platform[2] = False
+    for arc in arcs:
+        arc[0].angle = 0
+        arc[2] = False
 
 def end_fail(arbiter, space, data):
     reset_world(space)
@@ -123,10 +143,24 @@ def stop_movement(arbiter, space, data):
     for spike in conveyor_shape.body.spikes:
         spike[0].velocity = (0, 0)
 
+def check_arc_state(arbiter, space, data):
+    ball_body, arc_body = arbiter.bodies
+    arc[2] = True
+    if abs(ball_body.position.x - arc_body.position.x) < 0.4 * arc_body.radius:
+        global can_jump
+        can_jump = True
+        
+        space.add_post_step_callback(freeze_ball, key=ball_body, data={})
+def separate_arc(arbiter, space, data):
+    global can_jump
+    can_jump = False
+    
+    space.add_post_step_callback(unfreeze_ball, key=ball_body, data={})
 space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=begin_platform, separate=separate_platform)
 space.on_collision(BALL_TYPE, CONVEYOR_TYPE, begin=move_conveyor, pre_solve=check_conveyor_state, separate=stop_movement)
 space.on_collision(BALL_TYPE, SPIKE_TYPE, begin=end_fail)
 space.on_collision(BALL_TYPE, GOAL_TYPE, begin=end_win)
+space.on_collision(BALL_TYPE, ARC_TYPE, pre_solve=check_arc_state, separate=separate_arc)
 
 # Main game loop
 while running:
@@ -134,8 +168,12 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif can_jump and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
+        
+    keys = pygame.key.get_pressed()
+    
+    if can_jump and keys[pygame.K_SPACE]:
+        unfreeze_ball(space, key=ball_body, data={})
+        ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
     
     screen.fill('white')
 
@@ -156,9 +194,7 @@ while running:
 
     for arc in arcs:
         for segment in arc[1]:
-            start = arc[0].local_to_world(segment.a)
-            end = arc[0].local_to_world(segment.b)
-            pygame.draw.line(screen, pygame.Color('black'), (start.x, fcs.flipy(start.y)), (end.x, fcs.flipy(end.y)), width=int(segment.radius*2))
+            pygame.draw.polygon(screen, pygame.Color('black'), [(v.x, fcs.flipy(v.y)) for v in [arc[0].local_to_world(v) for v in segment.get_vertices()]])
 
     for segment in goal[0][1]:
         start = goal[0][0].local_to_world(segment.a)
@@ -179,4 +215,3 @@ while running:
     clock.tick(60)
 
 pygame.quit()
-print(all_objects)
