@@ -43,7 +43,7 @@ space.add(ball_body, ball_shape)
 
 # World border initialization
 border_body = space.static_body
-bottom_shape = pymunk.Segment(border_body, (-SCREEN_DIMENSIONS[0], -60), (SCREEN_DIMENSIONS[0] * 2, -SCREEN_DIMENSIONS[0]), radius=10)
+bottom_shape = pymunk.Segment(border_body, (-SCREEN_DIMENSIONS[0], -60), (SCREEN_DIMENSIONS[0] * 2, -60), radius=10)
 bottom_shape.collision_type = SPIKE_TYPE
 space.add(bottom_shape)
 
@@ -56,7 +56,7 @@ conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
 arcs.extend(fcs.add_arc(space, 150, 250, 50, +0.5236, -0.5236))
 spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2, from_start=False, outside=False, offset=75))
+spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2, from_start=True, outside=False, offset=25))
 goal.extend(fcs.add_goal(space, 50, 50))
 
 all_objects.extend(platforms)

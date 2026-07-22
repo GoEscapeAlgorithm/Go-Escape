@@ -141,6 +141,7 @@ def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float
     arc_body.start_angle = start_angle
     arc_body.end_angle = end_angle
     arc_body.spikes = []
+    arc_body.thickness = thickness
     space.add(arc_body)
 
     angle_step = abs(end_angle - start_angle) / segments
@@ -162,7 +163,7 @@ def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float
     
     return [[arc_body, shapes, False]]
 
-def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 17, num_spikes = 1, offset = 0, from_start = True, outside = True):
+def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 13, num_spikes = 1, offset = 0, from_start = True, outside = True):
     offset = offset / arc_body.radius
     offset = (offset + 0.79 * size / arc_body.radius if from_start else -offset - 0.79 * size / arc_body.radius)
     for i in range(num_spikes):
@@ -171,7 +172,7 @@ def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 17, num_spi
         spike_body.angle = (arc_body.start_angle if from_start else arc_body.end_angle)
         spike_body.origin = [spike_body.position, spike_body.angle]
         spike_body.angular_velocity = arc_body.angular_velocity
-        spike_body.geo_center = pymunk.Vec2d.from_polar(arc_body.radius, offset)
+        spike_body.geo_center = pymunk.Vec2d.from_polar(arc_body.radius + (arc_body.thickness/2 if outside else -arc_body.thickness/2), offset)
         base_coord_1 = pymunk.Vec2d.from_polar(size/2, offset + 1.5708) + spike_body.geo_center
         base_coord_2 = pymunk.Vec2d.from_polar(size/2, offset - 1.5708) + spike_body.geo_center
         peak_coord = pymunk.Vec2d.from_polar(size, offset + (0 if outside else 3.14159)) + spike_body.geo_center
@@ -180,6 +181,6 @@ def add_arc_spike(space: pymunk.Space, arc_body: pymunk.Body, size = 17, num_spi
         space.add(spike_body, spike_shape)
         arc_body.spikes.append([spike_body, spike_shape])
 
-        a = 0.6 if outside else 0.8
+        a = 0.8 if outside else 0.9
         offset = offset + (a * size / arc_body.radius if from_start else a * -size / arc_body.radius)
     return arc_body.spikes
