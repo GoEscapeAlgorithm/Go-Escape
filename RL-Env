@@ -87,3 +87,89 @@ def playability_test():
             else:
                 problematic_platforms.append(get_platforms())
                 return False, problem_position, problematic_platforms
+***
+
+#
+platform_types = ["platform", "conveyors", "arcs", "hinges"]
+platform_deaths = pd.DataFrame(0, index=[1], columns=platform_types)
+platform_list = np.array(get_platform())
+attention_limit = 0
+panic_objects = set()
+
+def jump_proximity(get_closest_spike):
+    spike_coordinates, jump_distance = get_closest_spike()
+    if (jump_distance <= 40):
+        return 1
+    elif (jump_distance <= 80):
+        return 2
+    else:
+        return 3 
+
+
+def death_update(platform_list):
+    platform_deaths.at[1, hit_platform_type] += 1
+    panic_object()
+    if(run_time > attention_limit-3 and run_time < attention_limit+3):
+        attention_limit = math.mean(attention_limit, run_time)
+
+def panic_object():
+    for platform in platform_deaths.columns:
+        if (platform_deaths.at[1, platform] >= 8):
+            panic_objects.add(platform)
+        elif(platform_deaths.at[1, platform] <= 3):
+            panic_objects.add(platform)  
+
+def level_update():
+    current_platforms = get_platforms()
+    for platform in current_platforms:
+        platform_type = platform.type 
+        new_score = platform_deaths.at[1, platform_type] - 0.5
+        platform_deaths.at[1, platform_type] = max(0, new_score)
+    panic_object()
+
+def difficulty_increase(platformType):
+    for platformType in platform_list:
+        if platformType == "platform":
+            return "angle increase"
+        elif platformType == "arcs":
+            return "speed decrease", "more spikes"
+        else:
+            return "speed increase"
+
+def difficulty_decrease(platformType):
+    for platformType in platform_list:
+        if platformType == "platform":
+            return "angle decrease"
+        elif platformType == "arcs":
+            return "speed increase", "less spikes"
+        else:
+            return "speed decrease", "increase angle"
+
+def playability_test():
+    problem_position = None
+    max_frames = 2600 
+    current_frame = 0
+    problematic_platforms = []
+    while (current_frame <= max_frames):
+        space.step(1/60.0)
+        current_frame += 1
+        spike_coordinates, spike_distance = get_closest_spike()
+        if (spike_distance <= 40):
+            calculating = True
+            if can_jump():
+                unfreeze_ball(space, key=ball_body, data={})
+                ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
+
+        saved_positionX, saved_positionY = (ball_body.position.x, ball_body.position.y)
+        problem_position = saved_positionX, saved_positionY
+
+        if current_frame == max_frames:
+            problem_position = saved_positionX, saved_positionY
+            if won == True():
+                won = False
+                return True, None, []
+            else:
+                problematic_platforms.append(get_platforms())
+                return False, problem_position, problematic_platforms
+            #
+***
