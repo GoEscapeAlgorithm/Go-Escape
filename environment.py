@@ -14,7 +14,6 @@ CONVEYOR_TYPE = 4
 ARC_TYPE = 5
 HINGE_TYPE = 6
 
-
 # Pygame and pymunk initialization
 pygame.init()
 screen = pygame.display.set_mode(SCREEN_DIMENSIONS)
@@ -23,8 +22,6 @@ running = True
 calculating = False
 space = pymunk.Space()
 space.gravity = 0.0, -GRAVITY
-space.iterations = 30
-space.idle_speed_threshold = 0.2
 
 # Level and state storage
 can_jump = False
@@ -48,14 +45,14 @@ space.add(bottom_shape)
 start.extend(fcs.add_start(space, 150))
 platforms.extend(fcs.add_platform(space, 150, 500, 0.25))
 spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
-conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
+conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 140))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
 arcs.extend(fcs.add_arc(space, 175, 250, 50, +0.5236, -0.5236))
 spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=1, from_start=True, outside=False, offset=25))
+spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2, from_start=True, outside=False, offset=40))
 goal.extend(fcs.add_goal(space, 50, 50))
-platforms.extend(fcs.add_platform(space, 100, 100, -0.5, width=100))
-hinges.extend(fcs.add_hinge(space, 0, 400, 100, -0.7854, centered=False, left=True, clockwise=True))
+platforms.extend(fcs.add_platform(space, 80, 70, -0.5, width=100))
+hinges.extend(fcs.add_hinge(space, 0, 400, 100, -0.7854, centered=False, left=True))
 spikes.extend(fcs.add_hinge_spike(space, hinges[0][1], num_spikes=2))
 
 # Ball initialization
@@ -85,6 +82,12 @@ def unfreeze_ball(space, key, data):
         ball_body.body_type = pymunk.Body.DYNAMIC
         ball_body.mass = ball_body.data[0]
         ball_body.moment = ball_body.data[1]
+def set_jump_true(arbiter, space, data):
+    global can_jump
+    can_jump = True
+def set_jump_false(arbiter, space, data):
+    global can_jump
+    can_jump = False
 
 def reset_world(space: pymunk.Space, key, data):
     start[0].position = start[0].data[0]
@@ -136,24 +139,16 @@ def reset_world(space: pymunk.Space, key, data):
             spike[0].angle = spike[0].origin[1]
             spike[0].angular_velocity = 0
     
-
 def end_fail(arbiter, space, data):
     space.add_post_step_callback(reset_world, key="reset", data={})
 def end_win(arbiter, space, data):
     space.add_post_step_callback(reset_world, key="reset", data={})
 
 def begin_platform(arbiter, space, data):
-    global can_jump
-    can_jump = True
     _, platform_shape = arbiter.shapes
     mark_visited(platforms, platform_shape.body)
-def separate_platform(arbiter, space, data):
-    global can_jump
-    can_jump = False
 
 def move_conveyor(arbiter, space, data):
-    global can_jump
-    can_jump = True
     ball_shape, conveyor_shape = arbiter.shapes
 
     mark_visited(conveyors, conveyor_shape.body)
@@ -168,14 +163,14 @@ def move_conveyor(arbiter, space, data):
         for spike in conveyor_shape.body.spikes:
             spike[0].velocity = (-conveyor_shape.body.move_speed, 0)
 def check_conveyor_state(arbiter, space, data):
+    set_jump_true(arbiter, space, data)
     _, conveyor_shape = arbiter.shapes
     if conveyor_shape.body.position.x * conveyor_shape.body.direction > conveyor_shape.body.target * conveyor_shape.body.direction:
         conveyor_shape.body.velocity = (0, 0)
         for spike in conveyor_shape.body.spikes:
             spike[0].velocity = (0, 0)
 def stop_movement(arbiter, space, data):
-    global can_jump
-    can_jump = False 
+    set_jump_false(arbiter, space, data)
     _, conveyor_shape = arbiter.shapes
     conveyor_shape.body.velocity = (0, 0)
     for spike in conveyor_shape.body.spikes:
@@ -184,27 +179,25 @@ def stop_movement(arbiter, space, data):
 def check_arc_state(arbiter, space, data):
     ball_body, arc_body = arbiter.bodies
     mark_visited(arcs, arc_body)
-    if abs(ball_body.position.x - arc_body.position.x) < 0.4 * arc_body.radius and ((ball_body.position.y > arc_body.position.y) != (ball_body.position.get_distance(arc_body.position) < arc_body.radius)):
-        global can_jump
-        can_jump = True
+    if abs(ball_body.position.x - arc_body.position.x) < 0.35 * arc_body.radius and ((ball_body.position.y > arc_body.position.y) != (ball_body.position.get_distance(arc_body.position) < arc_body.radius)):
+        set_jump_true(arbiter, space, data)
         distance = ball_body.position.get_distance(arc_body.position)
         direction = (ball_body.position - arc_body.position).normalized()
         if (ball_body.position.y > arc_body.position.y):
             correct_distance = (arc_body.radius + arc_body.thickness/2) + ball_body.radius
-            ball_body.position += (correct_distance - distance) * direction
         else:
             correct_distance = (arc_body.radius - arc_body.thickness/2) - ball_body.radius
-            ball_body.position += (correct_distance - distance) * direction
+        ball_body.position += (correct_distance - distance) * direction
         space.add_post_step_callback(freeze_ball, key=ball_body, data={})
 def separate_arc(arbiter, space, data):
-    global can_jump
-    can_jump = False
-    
-    space.add_post_step_callback(unfreeze_ball, key=ball_body, data={})
+    ball_body, arc_body = arbiter.bodies
+    if abs(ball_body.position.x - arc_body.position.x) < 0.4 * arc_body.radius:
+        set_jump_false(arbiter, space, data)
+        
+        space.add_post_step_callback(unfreeze_ball, key=ball_body, data={})
 
 def move_hinge(arbiter, space, data):
-    global can_jump
-    can_jump = True
+    set_jump_true(arbiter, space, data)
     _, hinge_shape = arbiter.shapes
     mark_visited(hinges, hinge_shape)
     if not fcs.find_lowest_angle(hinge_shape.body.angle, hinge_shape.body.target):
@@ -212,12 +205,12 @@ def move_hinge(arbiter, space, data):
         for spike in hinge_shape.body.spikes:
             spike[0].angular_velocity = hinge_shape.body.speed * hinge_shape.body.direction
 
-space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=begin_platform, separate=separate_platform)
+space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=begin_platform, pre_solve=set_jump_true, separate=set_jump_false)
 space.on_collision(BALL_TYPE, CONVEYOR_TYPE, begin=move_conveyor, pre_solve=check_conveyor_state, separate=stop_movement)
 space.on_collision(BALL_TYPE, SPIKE_TYPE, begin=end_fail)
 space.on_collision(BALL_TYPE, GOAL_TYPE, begin=end_win)
 space.on_collision(BALL_TYPE, ARC_TYPE, pre_solve=check_arc_state, separate=separate_arc)
-space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=move_hinge, separate=separate_platform)
+space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=move_hinge, separate=set_jump_false)
 
 # Main game loop
 while running:
@@ -262,10 +255,7 @@ while running:
     
     for hinge in hinges:
         pygame.draw.polygon(screen, (111, 237, 220), [(v.x, fcs.flipy(v.y)) for v in [hinge[0].local_to_world(v) for v in hinge[1].get_vertices()]])
-        if hinge[0].centered:
-            pygame.draw.circle(screen, (111, 237, 220), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y) + hinge[0].width/2)), hinge[0].width/2)
-        else:
-            pygame.draw.circle(screen, (111, 237, 220), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y))), hinge[0].width/2)
+        pygame.draw.circle(screen, (111, 237, 220), (int(hinge[0].pivot_position.x), int(fcs.flipy(hinge[0].pivot_position.y))), hinge[0].width)
 
     for arc in arcs:
         for segment in arc[1]:
