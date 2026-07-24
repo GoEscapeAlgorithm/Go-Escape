@@ -1,11 +1,12 @@
 import pygame
 import pymunk
 import env_functions as fcs
-import math
 
 # General settings
 SCREEN_DIMENSIONS = (300, 600)
 GRAVITY = 450
+
+# Collision Types
 BALL_TYPE = 0
 STATIC_TERRAIN_TYPE = 1
 SPIKE_TYPE = 2
@@ -47,7 +48,7 @@ platforms.extend(fcs.add_platform(space, 150, 500, 0.25))
 spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
 conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 140))
 spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
-arcs.extend(fcs.add_arc(space, 175, 250, 50, +0.5236, -0.5236))
+arcs.extend(fcs.add_arc(space, 175, 250, 50))
 spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
 spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2, from_start=True, outside=False, offset=40))
 goal.extend(fcs.add_goal(space, 50, 50))
@@ -57,7 +58,7 @@ spikes.extend(fcs.add_hinge_spike(space, hinges[0][1], num_spikes=2))
 
 # Ball initialization
 ball_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
-ball_body.position = (start[0].position.x + 7, start[0].position.y + 10)
+ball_body.position = (start[0].position.x + 7, start[0].position.y + 13)
 ball_body.radius = 10
 ball_body.data = ball_body.mass, ball_body.moment
 ball_shape = pymunk.Circle(ball_body, 10)
@@ -102,7 +103,7 @@ def reset_world(space: pymunk.Space, key, data):
     calculating = False
     space.remove(ball_body, ball_shape)
     space.add(ball_body, ball_shape)
-    ball_body.position = (start[0].position.x + 7, start[0].position.y + 10)
+    ball_body.position = (start[0].position.x + 7, start[0].position.y + 13)
     ball_body.velocity = (0, 0)
     ball_body.angle = 0
     ball_body.angular_velocity = 0
@@ -110,7 +111,6 @@ def reset_world(space: pymunk.Space, key, data):
     ball_body.torque = 0
     unfreeze_ball(space, key=ball_body, data={})
 
-    
     global can_jump
     can_jump = False
     for conveyor in conveyors:
@@ -138,7 +138,7 @@ def reset_world(space: pymunk.Space, key, data):
             spike[0].position = spike[0].origin[0]
             spike[0].angle = spike[0].origin[1]
             spike[0].angular_velocity = 0
-    
+
 def end_fail(arbiter, space, data):
     space.add_post_step_callback(reset_world, key="reset", data={})
 def end_win(arbiter, space, data):

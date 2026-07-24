@@ -1,5 +1,4 @@
 import pymunk
-import pymunk.autogeometry
 SCREEN_DIMENSIONS = (300, 600)
 # Collision types:
 # BALL_TYPE = 0
@@ -133,7 +132,7 @@ def add_goal(space: pymunk.Space, x: int, y: int, width = 100, line_thickness = 
     space.add(goal_body, goal_base_shape, goal_left_wall_shape, goal_right_wall_shape)
     return [[goal_body, [goal_base_shape, goal_left_wall_shape, goal_right_wall_shape]]]
 
-def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle: float, end_angle: float, speed = 1.5, segments=100, thickness=7):
+def add_arc(space: pymunk.Space, x: int, y: int, radius: int, start_angle = 0.5236, end_angle = -0.5236, speed = 1.5, segments=100, thickness=7):
     start_angle = 6.2832 + start_angle if start_angle < 0 else start_angle
     end_angle = 6.2832 + end_angle if end_angle < 0 else end_angle
 
@@ -249,3 +248,10 @@ def add_start(space: pymunk.Space, x: int, width = 28, thickness = 5):
     right_gate_joint = pymunk.PivotJoint(space.static_body, right_gate_body, right_gate_body.pivot_position)
     space.add(left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint)
     return [left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint]
+
+#def add_start(space: pymunk.Space, x: int, width = 28, thickness = 5):
+    left_gate = []
+    left_gate.extend(add_hinge(space, x - width/2, 575, width/2, -1.5708, width=thickness))
+    right_gate = []
+    right_gate.extend(add_hinge(space, x + width/2, 575, width/2, -1.5708, left=False))
+    return [left_gate[0], right_gate[0], left_gate[1], right_gate[1]]
