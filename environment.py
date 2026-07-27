@@ -21,8 +21,6 @@ screen = pygame.display.set_mode(SCREEN_DIMENSIONS)
 clock = pygame.time.Clock()
 running = True
 calculating = False
-space = pymunk.Space()
-space.gravity = 0.0, -GRAVITY
 
 # Level and state storage
 can_jump = False
@@ -36,38 +34,10 @@ arcs = []
 hinges = []
 start = []
 num_frames_passed = 0
+current_level = 1
+level_passed = False
 
-# World border initialization
-border_body = space.static_body
-bottom_shape = pymunk.Segment(border_body, (-SCREEN_DIMENSIONS[0], -60), (SCREEN_DIMENSIONS[0] * 2, -60), radius=10)
-bottom_shape.collision_type = SPIKE_TYPE
-space.add(bottom_shape)
 
-# Level Creation - use extend instead of append
-start.extend(fcs.add_start(space, 150))
-platforms.extend(fcs.add_platform(space, 150, 500, 0.25))
-spikes.extend(fcs.add_platform_spike(space, platforms[0][1], num_spikes=2))
-conveyors.extend(fcs.add_conveyor(space, 200, 150, 100, 150))
-spikes.extend(fcs.add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
-arcs.extend(fcs.add_arc(space, 175, 250, 50, +0.5236, -0.5236))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=2))
-spikes.extend(fcs.add_arc_spike(space, arcs[0][0], num_spikes=3, from_start=True, outside=False, offset=25))
-goal.extend(fcs.add_goal(space, 50, 50))
-platforms.extend(fcs.add_platform(space, 100, 100, -0.5, width=100))
-platforms.extend(fcs.add_platform(space, 50, 5, 0, width=50))
-spikes.extend(fcs.add_platform_spike(space, platforms[2][1], num_spikes=3))
-hinges.extend(fcs.add_hinge(space, 0, 400, 100, -0.7854, centered=False, left=True, clockwise=True))
-spikes.extend(fcs.add_hinge_spike(space, hinges[0][1], num_spikes=2))
-hinges.extend(fcs.add_hinge(space, 200, 0, 100, -2.35619449, centered=False, left=False, clockwise=False))
-
-# Ball initialization
-ball_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
-ball_body.position = (start[0].position.x + 7, start[0].position.y + 13)
-ball_body.radius = 10
-ball_body.data = ball_body.mass, ball_body.moment
-ball_shape = pymunk.Circle(ball_body, 10)
-ball_shape.collision_type = BALL_TYPE
-space.add(ball_body, ball_shape)
 
 # Collision handlers
 def mark_visited(objects, body: pymunk.Body):
@@ -147,7 +117,8 @@ def reset_world(space: pymunk.Space, key, data):
 def end_fail(arbiter, space, data):
     space.add_post_step_callback(reset_world, key="reset", data={})
 def end_win(arbiter, space, data):
-    space.add_post_step_callback(reset_world, key="reset", data={})
+    global level_passed
+    level_passed = True
 
 def begin_platform(arbiter, space, data):
     _, platform_shape = arbiter.shapes
@@ -210,15 +181,84 @@ def move_hinge(arbiter, space, data):
         for spike in hinge_shape.body.spikes:
             spike[0].angular_velocity = hinge_shape.body.speed * hinge_shape.body.direction
 
-space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=begin_platform, pre_solve=set_jump_true, separate=set_jump_false)
-space.on_collision(BALL_TYPE, CONVEYOR_TYPE, begin=move_conveyor, pre_solve=check_conveyor_state, separate=stop_movement)
-space.on_collision(BALL_TYPE, SPIKE_TYPE, begin=end_fail)
-space.on_collision(BALL_TYPE, GOAL_TYPE, begin=end_win)
-space.on_collision(BALL_TYPE, ARC_TYPE, pre_solve=check_arc_state, separate=separate_arc)
-space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=move_hinge, separate=set_jump_false)
+
+
+def init_world(current_level: int):
+    global space
+    space = pymunk.Space()
+    space.gravity = 0.0, -GRAVITY
+
+    # Level and state storage
+    global can_jump
+    global object_visit_order
+    global all_objects
+    global platforms
+    global spikes
+    global conveyors
+    global goal
+    global arcs
+    global hinges
+    global start
+    global num_frames_passed
+    can_jump = False
+    object_visit_order = []
+    all_objects = []
+    platforms = []
+    spikes = []
+    conveyors = []
+    goal = []
+    arcs = []
+    hinges = []
+    start = []
+    num_frames_passed = 0
+
+    # World border initialization
+    border_body = space.static_body
+    bottom_shape = pymunk.Segment(border_body, (-SCREEN_DIMENSIONS[0], -60), (SCREEN_DIMENSIONS[0] * 2, -60), radius=10)
+    bottom_shape.collision_type = SPIKE_TYPE
+    space.add(bottom_shape)
+
+    # Level Creation - use extend instead of append
+    if current_level == 1:
+        fcs.map_1(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    elif current_level == 2:
+        fcs.map_2(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    elif current_level == 3:
+        fcs.map_3(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    elif current_level == 4:
+        fcs.map_4(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    elif current_level == 5:
+        fcs.map_5(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    else:
+        fcs.random_world(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+
+    # Ball initialization
+    global ball_body
+    global ball_shape
+    ball_body = pymunk.Body(mass = 10, moment = 1, body_type=pymunk.Body.DYNAMIC)
+    ball_body.position = (start[0].position.x + 7, start[0].position.y + 13)
+    ball_body.radius = 10
+    ball_body.data = ball_body.mass, ball_body.moment
+    ball_shape = pymunk.Circle(ball_body, 10)
+    ball_shape.collision_type = BALL_TYPE
+    space.add(ball_body, ball_shape)
+
+    # Apply collision handlers
+    space.on_collision(BALL_TYPE, STATIC_TERRAIN_TYPE, begin=begin_platform, pre_solve=set_jump_true, separate=set_jump_false)
+    space.on_collision(BALL_TYPE, CONVEYOR_TYPE, begin=move_conveyor, pre_solve=check_conveyor_state, separate=stop_movement)
+    space.on_collision(BALL_TYPE, SPIKE_TYPE, begin=end_fail)
+    space.on_collision(BALL_TYPE, GOAL_TYPE, begin=end_win)
+    space.on_collision(BALL_TYPE, ARC_TYPE, pre_solve=check_arc_state, separate=separate_arc)
+    space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=move_hinge, separate=set_jump_false)
+init_world(current_level)
 
 # Main game loop
 while running:
+    if level_passed:
+        current_level += 1
+        init_world(current_level)
+        level_passed = False
+        calculating = False
     # Event handlers
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
