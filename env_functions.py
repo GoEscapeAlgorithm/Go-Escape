@@ -1,4 +1,5 @@
 import pymunk
+import random
 SCREEN_DIMENSIONS = (300, 600)
 # Collision types:
 # BALL_TYPE = 0
@@ -206,7 +207,7 @@ def add_hinge(space: pymunk.Space, x: int, y: int, length: int, target: float, w
     hinge_body.centered = centered
     hinge_body.left = left
     hinge_body.spikes = []
-    hinge_body.direction = -1 if find_lowest_angle(target, hinge_body.angle) else 1
+    hinge_body.direction = -1 if left else 1
     if centered:
         hinge_shape = pymunk.Poly.create_box(hinge_body, (length, width))
     else:
@@ -254,3 +255,124 @@ def add_start(space: pymunk.Space, x: int, width = 28, thickness = 5):
     right_gate_joint = pymunk.PivotJoint(space.static_body, right_gate_body, right_gate_body.pivot_position)
     space.add(left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint)
     return [left_gate_body, right_gate_body, left_gate_shape, right_gate_shape, left_gate_joint, right_gate_joint]
+
+def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    x = random.uniform(50, 250)
+    y = 550
+    start.extend(add_start(space, x))
+    y -= random.randint(25, 50)
+    next_obj = random.randint(0, 1)
+    while y > 100:
+        
+        if next_obj == 0:
+            left = True
+            if x > 200:
+                left = True
+            elif x < 100:
+                left = False
+            else:
+                left = random.uniform(-1, 1) > 0
+            platforms.extend(add_platform(space, x, y, random.uniform(0.15, 0.25) * (1 if left else -1)))
+            spikes.extend(add_platform_spike(space, platforms[-1][1], num_spikes=random.randint(0, 2)))
+            x += random.uniform(70, 110) * (-1 if left else 1)
+            y -= 75
+        elif next_obj == 1:
+            left = x > 150
+            target = x + random.randint(70, 100) * (-1 if left else 1)
+            conveyors.extend(add_conveyor(space, x, y, 100, target))
+            spikes.extend(add_conveyor_spike(space, conveyors[-1][1], left=left, num_spikes=random.randint(0, 2)))
+            x = target + random.randint(100, 125) * (-1 if left else 1)
+            y -= 75
+        elif next_obj == 2:
+            left = True
+            if x > 200:
+                left = False
+            elif x < 100:
+                left = True
+            else:
+                left = random.uniform(-1, 1) > 0
+            hinges.extend(add_hinge(space, x - (50 if left else -50), y, 100, -0.7854 if left else 3.92699, left=left))
+            spikes.extend(add_hinge_spike(space, hinges[-1][1], num_spikes=random.randint(0, 2)))
+            y -= 75
+            x += random.randint(50, 75) * (1 if left else -1)
+            
+        elif next_obj == 3:
+            y -= 50
+            arcs.extend(add_arc(space, x, y, 50))
+            spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2)))
+            spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2), outside=False, offset=random.randint(0, 25)))
+            y -= 100
+        next_obj = random.randint(0, 3)
+            
+    goal.extend(add_goal(space, x, 50))
+    
+def map_4(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    start.extend(add_start(space, 150))
+    platforms.extend(add_platform(space, 150, 500, 0.25))
+    spikes.extend(add_platform_spike(space, platforms[0][1], num_spikes=2))
+    conveyors.extend(add_conveyor(space, 200, 150, 100, 150))
+    spikes.extend(add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
+    arcs.extend(add_arc(space, 175, 250, 50))
+    spikes.extend(add_arc_spike(space, arcs[0][0], num_spikes=2))
+    spikes.extend(add_arc_spike(space, arcs[0][0], num_spikes=2, outside=False, offset=25))
+    goal.extend(add_goal(space, 50, 50))
+    platforms.extend(add_platform(space, 83, 70, -0.5, width=90))
+    hinges.extend(add_hinge(space, 0, 400, 100, -0.7854, left=True))
+    spikes.extend(add_hinge_spike(space, hinges[0][1], num_spikes=2))
+
+def map_2(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    start.extend(add_start(space, 50))
+    conveyors.extend(add_conveyor(space, 50, 500, 100, 150))
+    spikes.extend(add_conveyor_spike(space, conveyors[0][1], left=False, num_spikes=2))
+    arcs.extend(add_arc(space, 250, 400, 50))
+    spikes.extend(add_arc_spike(space, arcs[0][0], offset=25, num_spikes=2))
+    spikes.extend(add_arc_spike(space, arcs[0][0], outside=False, offset=25))
+    conveyors.extend(add_conveyor(space, 250, 300, 100, 150))
+    spikes.extend(add_conveyor_spike(space, conveyors[1][1]))
+    hinges.extend(add_hinge(space, 0, 150, 100, -0.7854))
+    spikes.extend(add_hinge_spike(space, hinges[0][1]))
+    goal.extend(add_goal(space, 200, 50))
+
+def map_1(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    start.extend(add_start(space, 150))
+    platforms.extend(add_platform(space, 150, 500, 0.25))
+    platforms.extend(add_platform(space, 50, 400, -0.25))
+    platforms.extend(add_platform(space, 250, 200, 0.5))
+    platforms.extend(add_platform(space, 150, 100, -0.25))
+    goal.extend(add_goal(space, 200, 50))
+
+def map_3(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    start.extend(add_start(space, 250))
+    arcs.extend(add_arc(space, 250, 425, 50, speed=-1.5))
+    spikes.extend(add_arc_spike(space, arcs[0][0], num_spikes=8))
+    spikes.extend(add_arc_spike(space, arcs[0][0], from_start=False, offset=100))
+    spikes.extend(add_arc_spike(space, arcs[0][0], from_start=False, num_spikes=2, outside=False))
+    platforms.extend(add_platform(space, 250, 325, 0))
+    hinges.extend(add_hinge(space, 75, 200, 100, -0.5236))
+    spikes.extend(add_hinge_spike(space, hinges[0][1]))
+    conveyors.extend(add_conveyor(space, 250, 75, 100, 150))
+    spikes.extend(add_conveyor_spike(space, conveyors[0][1]))
+    goal.extend(add_goal(space, 50, 50))
+
+def map_5(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
+    start.extend(add_start(space, 250))
+    hinges.extend(add_hinge(space, 275, 550, 80, -0.7854, left=False))
+    hinges.extend(add_hinge(space, 225, 500, 80, -0.7854, left=False))
+    hinges.extend(add_hinge(space, 175, 450, 80, -0.7854, left=False))
+    hinges.extend(add_hinge(space, 125, 400, 80, -0.7854, left=False))
+    hinges.extend(add_hinge(space, 75, 350, 72, -0.7854, left=False))
+    platforms.extend(add_platform(space, 0, 300, 1.5708))
+    platforms.extend(add_platform(space, 0, 265, 0))
+    platforms.extend(add_platform(space, 0, 280, -0.7854))
+    platforms.extend(add_platform(space, 140, 385, 0.7854, width=10))
+    platforms.extend(add_platform(space, 240, 485, 0.7854, width=10))
+    platforms.extend(add_platform(space, 165, 360, 0.7854, 280))
+    spikes.extend(add_platform_spike(space, platforms[-1][1], num_spikes=18))
+    platforms.extend(add_platform(space, 300, 575, 1.5708))
+    hinges.extend(add_hinge(space, 300, 300, 80, -0.25, left=False))
+    spikes.extend(add_hinge_spike(space, hinges[-1][1]))
+    arcs.extend(add_arc(space, 150, 150, 50, speed=-1.5))
+    spikes.extend(add_arc_spike(space, arcs[0][0], from_start=False, num_spikes = 2))
+    spikes.extend(add_arc_spike(space, arcs[0][0], from_start=False, outside=False, num_spikes=2))
+    platforms.extend(add_platform(space, 150, 60, 0))
+    goal.extend(add_goal(space, 50, 50))
