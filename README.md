@@ -1,6 +1,6 @@
 # Go-Escape-AI
 
-This project will use Renforcement learning to create a algorithm that creates Go Escape levels as well as plays them.
+This project will use Renforcement learning to train an AI that can play Go Escape.
 
 Team members:
   Allen, Steve, Ethan, & Nitin
