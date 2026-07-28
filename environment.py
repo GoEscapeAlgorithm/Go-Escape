@@ -7,13 +7,13 @@ SCREEN_DIMENSIONS = (300, 600)
 GRAVITY = 450
 
 # Collision Types
-BALL_TYPE = 0
 STATIC_TERRAIN_TYPE = 1
 SPIKE_TYPE = 2
 GOAL_TYPE = 3
 CONVEYOR_TYPE = 4
 ARC_TYPE = 5
 HINGE_TYPE = 6
+BALL_TYPE = 7
 
 # Pygame and pymunk initialization
 pygame.init()
@@ -21,6 +21,8 @@ screen = pygame.display.set_mode(SCREEN_DIMENSIONS)
 clock = pygame.time.Clock()
 running = True
 calculating = False
+space = pymunk.Space()
+space.gravity = 0.0, -GRAVITY
 
 # Level and state storage
 can_jump = False
@@ -35,9 +37,7 @@ hinges = []
 start = []
 num_frames_passed = 0
 current_level = 1
-level_passed = False
-
-
+level_passed = 0
 
 # Collision handlers
 def mark_visited(objects, body: pymunk.Body):
@@ -66,11 +66,12 @@ def set_jump_false(arbiter, space, data):
     can_jump = False
 
 def reset_world(space: pymunk.Space, key, data):
-    global object_visit_order, num_frames_passed, calculating, can_jump
+    global object_visit_order, num_frames_passed, calculating, can_jump, level_passed
     object_visit_order = []
     num_frames_passed = 0
     calculating = False
     can_jump = False
+    level_passed = 0
     start[0].position = start[0].data[0]
     start[0].angle = start[0].data[1]
     start[0].angular_velocity = 0
@@ -79,8 +80,8 @@ def reset_world(space: pymunk.Space, key, data):
     start[1].angle = start[1].data[1]
     start[1].angular_velocity = 0
     start[1].velocity = (0, 0)
-    space.remove(ball_body, ball_shape)
-    space.add(ball_body, ball_shape)
+    #space.remove(ball_body, ball_shape)
+    #space.add(ball_body, ball_shape)
     ball_body.position = (start[0].position.x + 7, start[0].position.y + 13)
     ball_body.velocity = (0, 0)
     ball_body.angle = 0
@@ -115,10 +116,17 @@ def reset_world(space: pymunk.Space, key, data):
             spike[0].angular_velocity = 0
 
 def end_fail(arbiter, space, data):
-    space.add_post_step_callback(reset_world, key="reset", data={})
+    _, killer = arbiter.shapes
+
+    print("Killed by:", killer)
+    print("Collision type:", killer.collision_type)
+    print("Body:", killer.body)
+    print("Body position:", killer.body.position if killer.body else None)
+    global level_passed
+    level_passed = -1
 def end_win(arbiter, space, data):
     global level_passed
-    level_passed = True
+    level_passed = 1
 
 def begin_platform(arbiter, space, data):
     _, platform_shape = arbiter.shapes
@@ -153,24 +161,24 @@ def stop_movement(arbiter, space, data):
         spike[0].velocity = (0, 0)
 
 def check_arc_state(arbiter, space, data):
-    ball_body, arc_body = arbiter.bodies
-    mark_visited(arcs, arc_body)
-    if abs(ball_body.position.x - arc_body.position.x) < 0.35 * arc_body.radius and ((ball_body.position.y > arc_body.position.y) != (ball_body.position.get_distance(arc_body.position) < arc_body.radius)):
+    ball_shape, arc_shape = arbiter.shapes
+    mark_visited(arcs, arc_shape.body)
+    if abs(ball_shape.body.position.x - arc_shape.body.position.x) < 0.35 * arc_shape.body.radius and ((ball_shape.body.position.y > arc_shape.body.position.y) != (ball_shape.body.position.get_distance(arc_shape.body.position) < arc_shape.body.radius)):
         set_jump_true(arbiter, space, data)
-        distance = ball_body.position.get_distance(arc_body.position)
-        direction = (ball_body.position - arc_body.position).normalized()
-        if (ball_body.position.y > arc_body.position.y):
-            correct_distance = (arc_body.radius + arc_body.thickness/2) + ball_body.radius
+        distance = ball_shape.body.position.get_distance(arc_shape.body.position)
+        direction = (ball_shape.body.position - arc_shape.body.position).normalized()
+        if (ball_shape.body.position.y > arc_shape.body.position.y):
+            correct_distance = (arc_shape.body.radius + arc_shape.body.thickness/2) + ball_shape.body.radius
         else:
-            correct_distance = (arc_body.radius - arc_body.thickness/2) - ball_body.radius
-        ball_body.position += (correct_distance - distance) * direction
-        space.add_post_step_callback(freeze_ball, key=ball_body, data={})
+            correct_distance = (arc_shape.body.radius - arc_shape.body.thickness/2) - ball_shape.body.radius
+        ball_shape.body.position += (correct_distance - distance) * direction
+        space.add_post_step_callback(freeze_ball, key=ball_shape.body, data={})
 def separate_arc(arbiter, space, data):
-    ball_body, arc_body = arbiter.bodies
-    if abs(ball_body.position.x - arc_body.position.x) < 0.4 * arc_body.radius:
+    ball_shape, arc_shape = arbiter.shapes
+    if abs(ball_shape.body.position.x - arc_shape.body.position.x) < 0.4 * arc_shape.body.radius:
         set_jump_false(arbiter, space, data)
         
-        space.add_post_step_callback(unfreeze_ball, key=ball_body, data={})
+        space.add_post_step_callback(unfreeze_ball, key=ball_shape.body, data={})
 
 def move_hinge(arbiter, space, data):
     set_jump_true(arbiter, space, data)
@@ -182,11 +190,14 @@ def move_hinge(arbiter, space, data):
             spike[0].angular_velocity = hinge_shape.body.speed * hinge_shape.body.direction
 
 
-
 def init_world(current_level: int):
     global space
-    space = pymunk.Space()
-    space.gravity = 0.0, -GRAVITY
+    for shape in list(space.shapes):
+        space.remove(shape)
+    for body in list(space.bodies):
+        space.remove(body)
+    for constraint in list(space.constraints):
+        space.remove(constraint)
 
     # Level and state storage
     global can_jump
@@ -219,18 +230,18 @@ def init_world(current_level: int):
     space.add(bottom_shape)
 
     # Level Creation - use extend instead of append
-    if current_level == 1:
-        fcs.map_1(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
-    elif current_level == 2:
-        fcs.map_2(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
-    elif current_level == 3:
-        fcs.map_3(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
-    elif current_level == 4:
-        fcs.map_4(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
-    elif current_level == 5:
-        fcs.map_5(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
-    else:
-        fcs.random_world(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #if current_level == 1:
+        #fcs.map_1(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #elif current_level == 2:
+        #fcs.map_2(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #elif current_level == 3:
+        #fcs.map_3(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #elif current_level == 4:
+        #fcs.map_4(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #elif current_level == 5:
+        #fcs.map_5(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
+    #else:
+    fcs.random_world(space, platforms, spikes, conveyors, goal, arcs, hinges, start)
 
     # Ball initialization
     global ball_body
@@ -254,10 +265,10 @@ init_world(current_level)
 
 # Main game loop
 while running:
-    if level_passed:
+    if level_passed == 1:
         current_level += 1
         init_world(current_level)
-        level_passed = False
+        level_passed = 0
         calculating = False
     # Event handlers
     for event in pygame.event.get():
@@ -271,7 +282,9 @@ while running:
     if can_jump and keys[pygame.K_SPACE]:
         unfreeze_ball(space, key=ball_body, data={})
         ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
-
+    if keys[pygame.K_r] or level_passed == -1:
+        reset_world(space, key="reset", data={})
+    
     for hinge in hinges:
         if fcs.find_lowest_angle(hinge[0].angle, hinge[0].target):
             hinge[0].angular_velocity = 0
@@ -330,7 +343,6 @@ while running:
 
     clock.tick(60)
     num_frames_passed += 1
-    
 
 pygame.quit()
 
