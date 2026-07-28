@@ -57,7 +57,7 @@ def add_platform_spike(space: pymunk.Space, platform_shape: pymunk.Shape, size =
         else:
             platform_coords = max(platform_coords, key=lambda point: point[0])
 
-    platform_coords += pymunk.Vec2d.from_polar(offset, platform_shape.body.angle if not higher else platform_shape.body.angle + 3.14159)
+    platform_coords += pymunk.Vec2d.from_polar(offset, platform_shape.body.angle if platform_shape.body.angle < 0 != higher else platform_shape.body.angle + 3.14159)
     base_coord_1 = pymunk.Vec2d.from_polar(size, -2.6180)
     base_coord_2 = pymunk.Vec2d.from_polar(size, -0.5236)
     peak_coord = pymunk.Vec2d.from_polar(size, 1.5708)
@@ -258,31 +258,29 @@ def add_start(space: pymunk.Space, x: int, width = 28, thickness = 5):
 
 def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, hinges, start):
     x = random.uniform(50, 250)
-    y = 550
+    y = 525
     start.extend(add_start(space, x))
     y -= random.randint(25, 50)
     next_obj = random.randint(0, 1)
+    previous_obj = -1
+    previous_direc = 0
     while y > 100:
-        
+        x = min(275, max(x, 25))
         if next_obj == 0:
-            left = True
-            if x > 200:
-                left = True
-            elif x < 100:
-                left = False
-            else:
-                left = random.uniform(-1, 1) > 0
+            left = x > 150
             platforms.extend(add_platform(space, x, y, random.uniform(0.15, 0.25) * (1 if left else -1)))
             spikes.extend(add_platform_spike(space, platforms[-1][1], num_spikes=random.randint(0, 2)))
-            x += random.uniform(70, 110) * (-1 if left else 1)
+            x += random.uniform(100, 125) * (-1 if left else 1)
             y -= 75
+            previous_direc = -1 if left else 1
         elif next_obj == 1:
             left = x > 150
-            target = x + random.randint(70, 100) * (-1 if left else 1)
+            target = x + random.randint(40, 70) * (-1 if left else 1)
             conveyors.extend(add_conveyor(space, x, y, 100, target))
             spikes.extend(add_conveyor_spike(space, conveyors[-1][1], left=left, num_spikes=random.randint(0, 2)))
             x = target + random.randint(100, 125) * (-1 if left else 1)
             y -= 75
+            previous_direc = -1 if left else 1
         elif next_obj == 2:
             left = True
             if x > 200:
@@ -293,16 +291,20 @@ def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, 
                 left = random.uniform(-1, 1) > 0
             hinges.extend(add_hinge(space, x - (50 if left else -50), y, 100, -0.7854 if left else 3.92699, left=left))
             spikes.extend(add_hinge_spike(space, hinges[-1][1], num_spikes=random.randint(0, 2)))
-            y -= 75
+            y -= 125
             x += random.randint(50, 75) * (1 if left else -1)
-            
+            previous_direc = -1 if left else 1
         elif next_obj == 3:
             y -= 50
             arcs.extend(add_arc(space, x, y, 50))
             spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2)))
             spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2), outside=False, offset=random.randint(0, 25)))
             y -= 100
+            previous_direc = 0
+        previous_obj = next_obj
         next_obj = random.randint(0, 3)
+        while previous_obj == 3 and next_obj == 2:
+            next_obj = random.randint(0, 3)
             
     goal.extend(add_goal(space, x, 50))
     
