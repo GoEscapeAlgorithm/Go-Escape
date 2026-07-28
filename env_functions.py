@@ -263,19 +263,16 @@ def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, 
     y -= random.randint(25, 50)
     next_obj = random.randint(0, 1)
     previous_obj = -1
+    previous_direc = 0
     while y > 100:
+        x = min(275, max(x, 25))
         if next_obj == 0:
-            left = True
-            if x > 200:
-                left = True
-            elif x < 100:
-                left = False
-            else:
-                left = random.uniform(-1, 1) > 0
+            left = x > 150
             platforms.extend(add_platform(space, x, y, random.uniform(0.15, 0.25) * (1 if left else -1)))
             spikes.extend(add_platform_spike(space, platforms[-1][1], num_spikes=random.randint(0, 2)))
             x += random.uniform(100, 125) * (-1 if left else 1)
             y -= 75
+            previous_direc = -1 if left else 1
         elif next_obj == 1:
             left = x > 150
             target = x + random.randint(40, 70) * (-1 if left else 1)
@@ -283,6 +280,7 @@ def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, 
             spikes.extend(add_conveyor_spike(space, conveyors[-1][1], left=left, num_spikes=random.randint(0, 2)))
             x = target + random.randint(100, 125) * (-1 if left else 1)
             y -= 75
+            previous_direc = -1 if left else 1
         elif next_obj == 2:
             left = True
             if x > 200:
@@ -295,13 +293,15 @@ def random_world(space: pymunk.Space, platforms, spikes, conveyors, goal, arcs, 
             spikes.extend(add_hinge_spike(space, hinges[-1][1], num_spikes=random.randint(0, 2)))
             y -= 125
             x += random.randint(50, 75) * (1 if left else -1)
-            
+            previous_direc = -1 if left else 1
         elif next_obj == 3:
             y -= 50
             arcs.extend(add_arc(space, x, y, 50))
             spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2)))
             spikes.extend(add_arc_spike(space, arcs[-1][0], num_spikes=random.randint(0, 2), outside=False, offset=random.randint(0, 25)))
             y -= 100
+            previous_direc = 0
+        previous_obj = next_obj
         next_obj = random.randint(0, 3)
         while previous_obj == 3 and next_obj == 2:
             next_obj = random.randint(0, 3)
