@@ -12,4 +12,5 @@ https://gymnasium.farama.org/introduction/create_custom_env/
 https://www.pymunk.org/en/latest/
 https://www.pygame.org/docs/
 https://github.com/viblo/pymunk/blob/master/pymunk/examples/balls_and_lines.py
+https://github.com/DLR-RM/stable-baselines3
 AI to help with various bug fixes
