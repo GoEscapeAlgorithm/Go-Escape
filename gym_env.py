@@ -5,10 +5,15 @@ import pymunk
 import pygame
 import env_functions as fcs
 from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
 class GoEscapeEnv(gym.Env):
     def __init__(self, render_mode: Optional[str] = None):
         self.render_mode = render_mode
+        metadata = {
+            "render_modes": ["human", "rgb_array"],
+            "render_fps": 60,
+        }
         # General settings
         self.SCREEN_DIMENSIONS = (300, 600)
         self.GRAVITY = 450
@@ -46,9 +51,15 @@ class GoEscapeEnv(gym.Env):
 
         # World border initialization
         self.border_body = self.space.static_body
-        self.bottom_shape = pymunk.Segment(self.border_body, (-self.SCREEN_DIMENSIONS[0], -60), (self.SCREEN_DIMENSIONS[0] * 2, -60), radius=10)
+        self.bottom_shape = pymunk.Segment(self.border_body, (-60, -60), (self.SCREEN_DIMENSIONS[0] * 2, -60), radius=10)
+        self.left_shape = pymunk.Segment(self.border_body, (-60, -60), (-60, self.SCREEN_DIMENSIONS[1] * 2), radius=10)
+        self.right_shape = pymunk.Segment(self.border_body, (self.SCREEN_DIMENSIONS[0] + 60, -60), (self.SCREEN_DIMENSIONS[0] + 60, self.SCREEN_DIMENSIONS[1] * 2), radius=10)
         self.bottom_shape.collision_type = SPIKE_TYPE
         self.space.add(self.bottom_shape)
+        self.left_shape.collision_type = SPIKE_TYPE
+        self.space.add(self.left_shape)
+        self.right_shape.collision_type = SPIKE_TYPE
+        self.space.add(self.right_shape)
 
         # Level Creation - use extend instead of append
         self.start.extend(fcs.add_start(self.space, 150))
@@ -82,12 +93,11 @@ class GoEscapeEnv(gym.Env):
         self.space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=self.move_hinge, separate=self.set_jump_false)
 
 
-        self.observation_space = gym.spaces.Box(0, 255, (self.SCREEN_DIMENSIONS[1], self.SCREEN_DIMENSIONS[0], 3), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(0, 255, (self.SCREEN_DIMENSIONS[0], self.SCREEN_DIMENSIONS[1], 3), dtype=np.uint8)
         self.action_space = gym.spaces.Discrete(2)
 
     def _get_obs(self):
         obs = pygame.surfarray.array3d(self.canvas)
-        obs = np.transpose(obs, (1, 0, 2))
         return obs
 # Collision handlers
     def mark_visited(self, objects, body: pymunk.Body):
@@ -113,7 +123,7 @@ class GoEscapeEnv(gym.Env):
     def set_jump_false(self, arbiter, space, data):
         self.can_jump = False
 
-    def reset_world(self, space: pymunk.Space, key, data):
+    def reset_world(self, space: pymunk.Space):
         self.object_visit_order = []
         self.num_frames_passed = 0
         self.can_jump = False
@@ -228,7 +238,7 @@ class GoEscapeEnv(gym.Env):
         super().reset(seed=seed)
 
         self.win_state = 0
-        self.reset_world(...)
+        self.reset_world(self.space)
 
         obs = self._get_obs()
 
@@ -236,19 +246,20 @@ class GoEscapeEnv(gym.Env):
             self.render()
         return obs, {}
 
-    def render(self, mode='human'):
-        if mode == 'human':
+    def render(self):
+        if self.render_mode == 'human':
             # Event handlers
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self.close(self)
+                    self.close()
                     return
             self.screen.blit(self.canvas, (0, 0))
             pygame.display.flip()
-        elif mode == 'rgb_array':
+            self.clock.tick(60)
+        elif self.render_mode == 'rgb_array':
             return self._get_obs()
         else:
-            raise ValueError(f"Unsupported render mode: {mode}")
+            raise ValueError(f"Unsupported render mode: {self.render_mode}")
     def _draw(self):
         # Rendering
         for spike in self.spikes:
@@ -300,7 +311,7 @@ class GoEscapeEnv(gym.Env):
                 for spike in hinge[0].spikes:
                     spike[0].angular_velocity = 0
         self.canvas.fill((68, 156, 144))
-    
+
         
         # Advance physics engine
         dt = 1.0 / 60.0
@@ -310,14 +321,16 @@ class GoEscapeEnv(gym.Env):
         # Reset when ball leaves screen
         # Theoretically should never run due to the border, but just in case something weird happens, still might be useful. 
         if self.ball_body.position[1] < -50:
-            self.reset_world(self.space, key=self.ball_body, data={})
+            self.reset_world(self.space)
         self.num_frames_passed += 1
-
+        self._draw()
+        if self.render_mode == 'human':
+            self.render()
         observation = self._get_obs()
         info = {}
         terminated = self.win_state != 0
         truncated = self.num_frames_passed > 3000
-        reward = self.win_state if self.win_state != 0 else 0.1
+        reward = self.win_state * 100 if self.win_state != 0 else 0.1
         
         return observation, reward, terminated, truncated, info
 
@@ -339,14 +352,29 @@ from gymnasium.utils.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
 
 env = make_vec_env(GoEscapeEnv, n_envs=8)
+env = VecFrameStack(env, n_stack=4)
 
-# 2. Initialize the PPO agent
-model = PPO("CnnPolicy", env, verbose=1)
+model = PPO("CnnPolicy", env, verbose=1, n_steps=512, device="cuda")
 
 print("begin training")
-# 3. Train the agent
-model.learn(total_timesteps=10000)
 
-# 4. Save the trained model
+model.learn(total_timesteps=1000000, progress_bar=True)
+
 model.save("ppo_goEscape")
 print("trained!")
+
+model = PPO.load("ppo_goEscape")
+eval_env = DummyVecEnv([
+    lambda: GoEscapeEnv(render_mode="human")
+])
+
+eval_env = VecFrameStack(eval_env, n_stack=4)
+obs = eval_env.reset()
+
+while True:
+    action, _ = model.predict(obs, deterministic=True)
+
+    obs, reward, done, info = eval_env.step(action)
+
+    if done[0]:
+        obs = eval_env.reset()
