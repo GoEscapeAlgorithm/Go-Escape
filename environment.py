@@ -37,9 +37,7 @@ hinges = []
 start = []
 num_frames_passed = 0
 current_level = 1
-level_passed = False
-
-
+level_passed = 0
 
 # Collision handlers
 def mark_visited(objects, body: pymunk.Body):
@@ -68,11 +66,12 @@ def set_jump_false(arbiter, space, data):
     can_jump = False
 
 def reset_world(space: pymunk.Space, key, data):
-    global object_visit_order, num_frames_passed, calculating, can_jump
+    global object_visit_order, num_frames_passed, calculating, can_jump, level_passed
     object_visit_order = []
     num_frames_passed = 0
     calculating = False
     can_jump = False
+    level_passed = 0
     start[0].position = start[0].data[0]
     start[0].angle = start[0].data[1]
     start[0].angular_velocity = 0
@@ -123,10 +122,11 @@ def end_fail(arbiter, space, data):
     print("Collision type:", killer.collision_type)
     print("Body:", killer.body)
     print("Body position:", killer.body.position if killer.body else None)
-    space.add_post_step_callback(reset_world, key="reset", data={})
+    global level_passed
+    level_passed = -1
 def end_win(arbiter, space, data):
     global level_passed
-    level_passed = True
+    level_passed = 1
 
 def begin_platform(arbiter, space, data):
     _, platform_shape = arbiter.shapes
@@ -265,10 +265,10 @@ init_world(current_level)
 
 # Main game loop
 while running:
-    if level_passed:
+    if level_passed == 1:
         current_level += 1
         init_world(current_level)
-        level_passed = False
+        level_passed = 0
         calculating = False
     # Event handlers
     for event in pygame.event.get():
@@ -282,7 +282,9 @@ while running:
     if can_jump and keys[pygame.K_SPACE]:
         unfreeze_ball(space, key=ball_body, data={})
         ball_body.velocity = (ball_body.velocity.x, 0.4 * GRAVITY)
-
+    if keys[pygame.K_r] or level_passed == -1:
+        reset_world(space, key="reset", data={})
+    
     for hinge in hinges:
         if fcs.find_lowest_angle(hinge[0].angle, hinge[0].target):
             hinge[0].angular_velocity = 0
