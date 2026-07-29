@@ -348,19 +348,18 @@ from gymnasium.utils.env_checker import check_env
     #print(f"Environment has issues: {e}")
 
 
-# 1. Create the environment
 from stable_baselines3.common.env_util import make_vec_env
 
-env = make_vec_env(GoEscapeEnv, n_envs=8)
-env = VecFrameStack(env, n_stack=4)
+#env = make_vec_env(GoEscapeEnv, n_envs=8)
+#env = VecFrameStack(env, n_stack=4)
 
-model = PPO("CnnPolicy", env, verbose=1, n_steps=512, device="cuda")
+#model = PPO("CnnPolicy", env, verbose=1, n_steps=512, device="cuda")
 
 print("begin training")
 
-model.learn(total_timesteps=1000000, progress_bar=True)
+#model.learn(total_timesteps=1000000, progress_bar=True)
 
-model.save("ppo_goEscape")
+#model.save("ppo_goEscape")
 print("trained!")
 
 model = PPO.load("ppo_goEscape")
