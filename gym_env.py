@@ -7,7 +7,8 @@ import env_functions as fcs
 from stable_baselines3 import PPO
 
 class GoEscapeEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, render_mode: Optional[str] = None):
+        self.render_mode = render_mode
         # General settings
         self.SCREEN_DIMENSIONS = (300, 600)
         self.GRAVITY = 450
@@ -23,11 +24,10 @@ class GoEscapeEnv(gym.Env):
 
         # Pygame and pymunk initialization
         pygame.init()
-        self.screen = pygame.display.set_mode(self.SCREEN_DIMENSIONS)
+        if self.render_mode == 'human':
+            self.screen = pygame.display.set_mode(self.SCREEN_DIMENSIONS)
+            self.clock = pygame.time.Clock()
         self.canvas = pygame.Surface(self.SCREEN_DIMENSIONS)
-        self.clock = pygame.time.Clock()
-        self.running = True
-        self.calculating = False
         self.space = pymunk.Space()
         self.space.gravity = 0.0, -self.GRAVITY
 
@@ -116,7 +116,6 @@ class GoEscapeEnv(gym.Env):
     def reset_world(self, space: pymunk.Space, key, data):
         self.object_visit_order = []
         self.num_frames_passed = 0
-        self.calculating = False
         self.can_jump = False
         self.start[0].position = self.start[0].data[0]
         self.start[0].angle = self.start[0].data[1]
@@ -227,31 +226,30 @@ class GoEscapeEnv(gym.Env):
 # End of collision handlers
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
-        self.reset_world(self.space, key=None, data={})
 
-        observation = self._get_obs()
-        info = {}
-        return observation, info
+        self.win_state = 0
+        self.reset_world(...)
 
-    def step(self, action):
-        # Event handlers
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-        
-        if not self.calculating and action == 1:
-            self.calculating = True
-        if self.can_jump and action == 1:
-            self.unfreeze_ball(self.space, key=self.ball_body, data={})
-            self.ball_body.velocity = (self.ball_body.velocity.x, 0.4 * self.GRAVITY)
-    
-        for hinge in self.hinges:
-            if fcs.find_lowest_angle(hinge[0].angle, hinge[0].target):
-                hinge[0].angular_velocity = 0
-                for spike in hinge[0].spikes:
-                    spike[0].angular_velocity = 0
-        self.canvas.fill((68, 156, 144))
-    
+        obs = self._get_obs()
+
+        if self.render_mode == "human":
+            self.render()
+        return obs, {}
+
+    def render(self, mode='human'):
+        if mode == 'human':
+            # Event handlers
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.close(self)
+                    return
+            self.screen.blit(self.canvas, (0, 0))
+            pygame.display.flip()
+        elif mode == 'rgb_array':
+            return self._get_obs()
+        else:
+            raise ValueError(f"Unsupported render mode: {mode}")
+    def _draw(self):
         # Rendering
         for spike in self.spikes:
             pygame.draw.polygon(self.canvas, pygame.Color('black'), [(v.x, fcs.flipy(v.y)) for v in [spike[0].local_to_world(v) for v in spike[1].get_vertices()]])
@@ -288,20 +286,31 @@ class GoEscapeEnv(gym.Env):
             a = self.goal[0][0].local_to_world(segment.a)
             b = self.goal[0][0].local_to_world(segment.b)
             pygame.draw.line(self.canvas, pygame.Color('black'), (a.x, fcs.flipy(a.y)), (b.x, fcs.flipy(b.y)), width=int(segment.radius*2))
+    def close(self):
+        pygame.quit()
+
+    def step(self, action):
+        if self.can_jump and action == 1:
+            self.unfreeze_ball(self.space, key=self.ball_body, data={})
+            self.ball_body.velocity = (self.ball_body.velocity.x, 0.4 * self.GRAVITY)
+    
+        for hinge in self.hinges:
+            if fcs.find_lowest_angle(hinge[0].angle, hinge[0].target):
+                hinge[0].angular_velocity = 0
+                for spike in hinge[0].spikes:
+                    spike[0].angular_velocity = 0
+        self.canvas.fill((68, 156, 144))
+    
         
         # Advance physics engine
         dt = 1.0 / 60.0
-        if self.calculating:
-            for x in range(1):
-                self.space.step(dt)
+        for x in range(1):
+            self.space.step(dt)
         
         # Reset when ball leaves screen
         # Theoretically should never run due to the border, but just in case something weird happens, still might be useful. 
         if self.ball_body.position[1] < -50:
             self.reset_world(self.space, key=self.ball_body, data={})
-        pygame.display.flip()
-    
-        self.clock.tick(60)
         self.num_frames_passed += 1
 
         observation = self._get_obs()
@@ -327,7 +336,9 @@ from gymnasium.utils.env_checker import check_env
 
 
 # 1. Create the environment
-env = gym.make("gymnasium_env/GoEscape-v0")
+from stable_baselines3.common.env_util import make_vec_env
+
+env = make_vec_env(GoEscapeEnv, n_envs=8)
 
 # 2. Initialize the PPO agent
 model = PPO("CnnPolicy", env, verbose=1)
@@ -337,5 +348,5 @@ print("begin training")
 model.learn(total_timesteps=10000)
 
 # 4. Save the trained model
-model.save("ppo_cartpole")
+model.save("ppo_goEscape")
 print("trained!")
