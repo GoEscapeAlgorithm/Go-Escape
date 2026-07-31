@@ -1,15 +1,20 @@
+import os
 from typing import Optional
 import numpy as np
 import gymnasium as gym
+import numpy as np
 import pymunk
 import pygame
 import env_functions as fcs
+import math
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
+from stable_baselines3.common.env_util import make_vec_env
 
 class GoEscapeEnv(gym.Env):
-    def __init__(self, render_mode: Optional[str] = None):
+    def __init__(self, render_mode: Optional[str] = None, ray_num: int = 24):
         self.render_mode = render_mode
+        self.ray_num = ray_num
         metadata = {
             "render_modes": ["human", "rgb_array"],
             "render_fps": 60,
@@ -82,6 +87,7 @@ class GoEscapeEnv(gym.Env):
         self.ball_body.data = self.ball_body.mass, self.ball_body.moment
         self.ball_shape = pymunk.Circle(self.ball_body, 10)
         self.ball_shape.collision_type = BALL_TYPE
+        self.ball_shape.filter = pymunk.ShapeFilter(categories=0x1)
         self.space.add(self.ball_body, self.ball_shape)
 
         
@@ -92,13 +98,34 @@ class GoEscapeEnv(gym.Env):
         self.space.on_collision(BALL_TYPE, ARC_TYPE, pre_solve=self.check_arc_state, separate=self.separate_arc)
         self.space.on_collision(BALL_TYPE, HINGE_TYPE, pre_solve=self.move_hinge, separate=self.set_jump_false)
 
-
-        self.observation_space = gym.spaces.Box(0, 255, (self.SCREEN_DIMENSIONS[0], self.SCREEN_DIMENSIONS[1], 3), dtype=np.uint8)
+        input_amount = (self.ray_num * 2) + 5
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(input_amount,), dtype=np.float32)
         self.action_space = gym.spaces.Discrete(2)
 
     def _get_obs(self):
-        obs = pygame.surfarray.array3d(self.canvas)
-        return obs
+        stuffnthings = [self.ball_body.position.x, self.ball_body.position.y, self.ball_body.velocity.x, self.ball_body.velocity.y, float(self.can_jump)]
+        
+        ray_range = 300.0
+        ray_scans = []
+        angle_diff = (2 * math.pi) / self.ray_num
+
+        for fah in range(self.ray_num):
+            curr_angle = fah * angle_diff
+            ray_direction = pymunk.Vec2d(math.cos(curr_angle), math.sin(curr_angle))
+            ray_tar = self.ball_body.position + (ray_direction * ray_range)
+            
+            ray_filter = pymunk.ShapeFilter(categories=0xFFFFFFFE)
+            hit = self.space.segment_query_first(self.ball_body.position, ray_tar, radius=0, shape_filter=ray_filter)
+
+            if hit and hit.shape:
+                distance = self.ball_body.position.get_distance(hit.point) / ray_range
+                arc_speed = hit.shape.body.angular_velocity if hasattr(hit.shape.body, 'angular_velocity') else 0.0
+                ray_scans.append(distance)
+                ray_scans.append(arc_speed)
+            else:
+                ray_scans.append(1.0)
+                ray_scans.append(0.0)
+        return np.array(stuffnthings + ray_scans, dtype=np.float32)
 # Collision handlers
     def mark_visited(self, objects, body: pymunk.Body):
         for object in objects:
@@ -301,9 +328,14 @@ class GoEscapeEnv(gym.Env):
         pygame.quit()
 
     def step(self, action):
-        if self.can_jump and action == 1:
-            self.unfreeze_ball(self.space, key=self.ball_body, data={})
-            self.ball_body.velocity = (self.ball_body.velocity.x, 0.4 * self.GRAVITY)
+        self.num_frames_passed += 1
+        reward = 0.0
+        if action == 1:
+            if self.can_jump:
+                self.unfreeze_ball(self.space, key=self.ball_body, data={})
+                self.ball_body.velocity = (self.ball_body.velocity.x, 0.4 * self.GRAVITY)
+            else:
+                reward -= 2.0
     
         for hinge in self.hinges:
             if fcs.find_lowest_angle(hinge[0].angle, hinge[0].target):
@@ -319,61 +351,35 @@ class GoEscapeEnv(gym.Env):
             self.space.step(dt)
         
         # Reset when ball leaves screen
-        # Theoretically should never run due to the border, but just in case something weird happens, still might be useful. 
-        if self.ball_body.position[1] < -50:
-            self.reset_world(self.space)
-        self.num_frames_passed += 1
-        self._draw()
-        if self.render_mode == 'human':
-            self.render()
+        # Theoretically should never run due to the border, but just in case something weird happens, still might be useful.
+
+        if self.render_mode is not None:
+            self.canvas.fill((68, 156, 144))
+            self._draw()
+            if self.render_mode == 'human':
+                self.render()
+        
         observation = self._get_obs()
         info = {}
         terminated = self.win_state != 0
         truncated = self.num_frames_passed > 3000
-        reward = self.win_state * 100 if self.win_state != 0 else 0.1
-        
+
+        if self.win_state != 0:
+           reward = self.win_state * 100
+
         return observation, reward, terminated, truncated, info
 
 gym.register(id="gymnasium_env/GoEscape-v0",
              entry_point=GoEscapeEnv,
              max_episode_steps=30000)
 
-from gymnasium.utils.env_checker import check_env
+if __name__ == "__main__":
 
-# This will catch many common issues
-#try:
-    #check_env(gym.make("gymnasium_env/GoEscape-v0"))
-    #print("Environment passes all checks!")
-#except Exception as e:
-    #print(f"Environment has issues: {e}")
-
-
-from stable_baselines3.common.env_util import make_vec_env
-
-#env = make_vec_env(GoEscapeEnv, n_envs=8)
-#env = VecFrameStack(env, n_stack=4)
-
-#model = PPO("CnnPolicy", env, verbose=1, n_steps=512, device="cuda")
-
-print("begin training")
-
-#model.learn(total_timesteps=1000000, progress_bar=True)
-
-#model.save("ppo_goEscape")
-print("trained!")
-
-model = PPO.load("ppo_goEscape")
-eval_env = DummyVecEnv([
-    lambda: GoEscapeEnv(render_mode="human")
-])
-
-eval_env = VecFrameStack(eval_env, n_stack=4)
-obs = eval_env.reset()
-
-while True:
-    action, _ = model.predict(obs, deterministic=True)
-
-    obs, reward, done, info = eval_env.step(action)
-
-    if done[0]:
-        obs = eval_env.reset()
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    env = make_vec_env(GoEscapeEnv, n_envs=8, env_kwargs={"render_mode": None, "ray_num": 24})
+    
+    model = PPO("MlpPolicy", env, verbose=1, n_steps=512, device="cuda")
+    print("starting")
+    model.learn(total_timesteps=300000, progress_bar=True)
+    model.save("ppo_goEscape")
+    print("trained!")
