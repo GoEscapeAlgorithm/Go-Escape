@@ -372,7 +372,7 @@ class GoEscapeEnv(gym.Env):
 gym.register(id="gymnasium_env/GoEscape-v0",
              entry_point=GoEscapeEnv,
              max_episode_steps=30000)
-
+# hi!
 if __name__ == "__main__":
 
     os.environ["SDL_VIDEODRIVER"] = "dummy"
